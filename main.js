@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xDDDDEE);
@@ -25,20 +25,47 @@ secondCamera.lookAt(0, 0, 0);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
+
+// Para que as sombras aparecerem e sejam desenhadas, o motor de renderizar do Three.js precisa receber os mapeamentos das sombras
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // Aqui estou definindo o tipo da sombra (Bordas suaves e realistas) Onde segundo a doc é o padrão: https://threejs.org/docs/index.html#WebGLRenderer.shadowMap
 document.body.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
-// Luzes
-const ambientLight = new THREE.AmbientLight(0xdff0ff, 0.6); 
+// Ajustando o AmbientLight e o DirectionalLight para se propagar a todo o ambiente e colocando a luz na fogueira.
+// --- ILUMINAÇÃO (Requisito M2: 2 tipos de luz e sombras configuradas)  OBS: Apoio da IA Gemini ---
+const ambientLight = new THREE.AmbientLight(0x404050, 0.4); 
 scene.add(ambientLight);
 
-const sunLight = new THREE.DirectionalLight(0xfff5e6, 2.5);
-sunLight.position.set(10, 20, 10);
-sunLight.castShadow = true; 
-scene.add(sunLight);
+// 2. DirectionalLight: Simula uma fonte de luz distante (Luar/Sol). Seus raios são paralelos.
+const moonLight = new THREE.DirectionalLight(0x90b0d0, 1.5); 
+moonLight.position.set(10, 20, 10);
+moonLight.castShadow = true; // Permite que a luz projete sombras
+
+// Configuração da câmera ortográfica
+moonLight.shadow.camera.left = -10;
+moonLight.shadow.camera.right = 10;
+moonLight.shadow.camera.top = 10;
+moonLight.shadow.camera.bottom = -10;
+
+// Resolução da textura da sombra (Se colocar um valor maior vai ficar mais pesado haha)
+moonLight.shadow.mapSize.width = 2048; 
+moonLight.shadow.mapSize.height = 2048;
+scene.add(moonLight);
+
+// 3. PointLight: Emite luz de um único ponto em todas as direções (Fogueira).
+const campfireLight = new THREE.PointLight(0xff7700, 8, 15); // Cor laranja, intensidade 8, distância/decaimento 15
+
+// A posição deve ficar próxima/dentro do acampamento
+campfireLight.position.set(0.19, 0.17, 0.11);
+campfireLight.castShadow = true; 
+campfireLight.shadow.mapSize.width = 1024;
+campfireLight.shadow.mapSize.height = 1024;
+scene.add(campfireLight);
+
 
 // Material de Profundidade
 const depthMaterial = new THREE.MeshDepthMaterial();
@@ -53,29 +80,48 @@ const myTexture = textureLoader.load('assets/campsite/Texture.png');
 myTexture.flipY = true; 
 myTexture.colorSpace = THREE.SRGBColorSpace;
 
+//  Atualização das funçẽos de carregamento dos modelos
+
+// Essa função recebe um modelo 3D carregado via GLTFLoader e o prepara para ser adicionado à cena.
 function loadCampsite(gltf) {
     gltf.scene.scale.set(0.0003, 0.0003, 0.0003);
     gltf.scene.position.set(0, 0.105, 0);
 
+    // Aqui o traverse(callback) meio que faz um retorno nos objetos recursivamente, em profundidade. --> https://threejs.org/docs/pages/Object3D.html
     gltf.scene.traverse(function (node) {
         if (node.isMesh) {
             node.material.map = myTexture;
             node.material.needsUpdate = true;
+
+            node.castShadow = true;
+            node.receiveShadow = true;
         }
     });
-
     scene.add(gltf.scene);
 }
+
+// Daqui pra baixo o padrão é carregar → escalar → posicionar → traverse para sombras → scene.add) 
 
 function loadFox(gltf) {
     gltf.scene.scale.set(0.02, 0.02, 0.02);
     gltf.scene.position.set(0, 0.190, 0.5);
     gltf.scene.rotation.y = Math.PI;
-
+    gltf.scene.traverse(function (node) {
+        if (node.isMesh) {
+            node.castShadow = true; // Sombra no chão da raposa
+            node.receiveShadow = true;
+        }
+    });
     scene.add(gltf.scene);
 }
 
 function loadForest(object) {
+    object.traverse(function (node) {
+        if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
     scene.add(object);
 }
 
@@ -198,7 +244,7 @@ function applyOrbitalFrustumCulling() {
             } else {
                 node.visible = true;
             }
-            
+
             // Desativa culling automatico para fazer o culling manual
             node.frustumCulled = false;
         }

@@ -6,10 +6,10 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xDDDDEE);
+scene.background = new THREE.Color(0x1a0a21);
 
 // Camera Orbital
-const camera = new THREE.PerspectiveCamera(60, (window.innerWidth / 2) / window.innerHeight, 0.1, 12);
+const camera = new THREE.PerspectiveCamera(60, (window.innerWidth / 2) / window.innerHeight, 0.1, 100);
 camera.position.set(0, 2, 6);
 camera.lookAt(0, 0, 0);
 
@@ -37,7 +37,7 @@ controls.dampingFactor = 0.05;
 
 // Ajustando o AmbientLight e o DirectionalLight para se propagar a todo o ambiente e colocando a luz na fogueira.
 // --- ILUMINAÇÃO (Requisito M2: 2 tipos de luz e sombras configuradas)  OBS: Apoio da IA Gemini ---
-const ambientLight = new THREE.AmbientLight(0x404050, 0.4); 
+const ambientLight = new THREE.AmbientLight(0x050096, 0.4); 
 scene.add(ambientLight);
 
 // 2. DirectionalLight: Simula uma fonte de luz distante (Luar/Sol). Seus raios são paralelos.
@@ -57,15 +57,23 @@ moonLight.shadow.mapSize.height = 2048;
 scene.add(moonLight);
 
 // 3. PointLight: Emite luz de um único ponto em todas as direções (Fogueira).
-const campfireLight = new THREE.PointLight(0xff7700, 8, 15); // Cor laranja, intensidade 8, distância/decaimento 15
+const campfireLight = new THREE.PointLight(0xff7700, 1, 15); // Cor laranja, intensidade 8, distância/decaimento 15
 
 // A posição deve ficar próxima/dentro do acampamento
-campfireLight.position.set(0.19, 0.17, 0.11);
+campfireLight.position.set(-0.145, 0.13, 0.13);
 campfireLight.castShadow = true; 
 campfireLight.shadow.mapSize.width = 1024;
 campfireLight.shadow.mapSize.height = 1024;
 scene.add(campfireLight);
 
+const texturaFogo = new THREE.TextureLoader().load('assets/campsite/fogo.png');
+const materialFogo = new THREE.SpriteMaterial({ map: texturaFogo});
+const spriteFogo = new THREE.Sprite(materialFogo);
+
+spriteFogo.scale.set(0.05, 0.05, 1);
+spriteFogo.position.set(-0.145, 0.13, 0.13);
+
+scene.add(spriteFogo);
 
 // Material de Profundidade
 const depthMaterial = new THREE.MeshDepthMaterial();
@@ -115,6 +123,18 @@ function loadFox(gltf) {
     scene.add(gltf.scene);
 }
 
+function loadSky(gltf) {
+    gltf.scene.scale.set(0.3, 0.3, 0.3);
+    gltf.scene.position.set(0, 0, 0);
+    gltf.scene.traverse((node) => {
+        if (node.isMesh) {
+            node.userData.ignoreManualFrustumCulling = true;
+            node.frustumCulled = false;
+        }
+    });
+    scene.add(gltf.scene);
+}
+
 function loadForest(object) {
     object.traverse(function (node) {
         if (node.isMesh) {
@@ -140,6 +160,7 @@ textureLoader.load('assets/forest/scene.png', loadForestTexture);
 
 gltfLoader.load("assets/fox/scene.gltf", loadFox);
 gltfLoader.load("assets/campsite/scene.gltf", loadCampsite);
+gltfLoader.load("assets/sky/scene.gltf", loadSky);
 objLoader.load("assets/forest/scene.obj", loadForest);
 
 // GUI
@@ -232,7 +253,7 @@ function applyOrbitalFrustumCulling() {
     frustum.setFromProjectionMatrix(projScreenMatrix);
 
     scene.traverse((node) => {
-        if (node.isMesh) {
+        if (node.isMesh && !node.userData.ignoreManualFrustumCulling) {
             if (!node.geometry.boundingBox) {
                 node.geometry.computeBoundingBox();
             }
@@ -249,6 +270,7 @@ function applyOrbitalFrustumCulling() {
             node.frustumCulled = false;
         }
     });
+
 }
 
 function animate() {

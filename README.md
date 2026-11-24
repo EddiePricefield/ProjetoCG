@@ -1,5 +1,7 @@
 # Projeto de Computação Gráfica (IFSP) — Three.js
 
+<img width="1918" height="943" alt="image" src="https://github.com/user-attachments/assets/ff953b0e-020b-4fb9-aacc-df6782311f51" />
+
 ## Descrição
 
 O projeto consiste em um ambiente tridimensional interativo com a temática de um acampamento noturno em uma floresta. O jogador controla uma raposa e explora o cenário utilizando uma câmera em terceira pessoa.
@@ -52,3 +54,6 @@ A interface de diagnóstico permite controlar os seguintes recursos:
 npm install
 npm run dev
 ```
+
+## Nota de Transparência de IA
+A Inteligência Artificial foi utilizada para auxiliar no processo de desenvolvimento deste projeto. No entanto, os códigos foram revisados, reestruturados e corrigidos para atender às necessidades reais da equipe.

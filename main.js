@@ -3,7 +3,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a0a21);
@@ -31,9 +31,10 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // Aqui estou definindo o tipo da sombra (Bordas suaves e realistas) Onde segundo a doc é o padrão: https://threejs.org/docs/index.html#WebGLRenderer.shadowMap
 document.body.appendChild(renderer.domElement);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
+// Controles Orbitais da Câmera
+// const controls = new OrbitControls(camera, renderer.domElement);
+// controls.enableDamping = true;
+// controls.dampingFactor = 0.05;
 
 // Ajustando o AmbientLight e o DirectionalLight para se propagar a todo o ambiente e colocando a luz na fogueira.
 // --- ILUMINAÇÃO (Requisito M2: 2 tipos de luz e sombras configuradas)  OBS: Apoio da IA Gemini ---
@@ -110,17 +111,55 @@ function loadCampsite(gltf) {
 
 // Daqui pra baixo o padrão é carregar → escalar → posicionar → traverse para sombras → scene.add) 
 
+let fox;
+let mixer;
+let animations = {};
+let animacaoAtual;
+
 function loadFox(gltf) {
-    gltf.scene.scale.set(0.02, 0.02, 0.02);
-    gltf.scene.position.set(0, 0.190, 0.5);
-    gltf.scene.rotation.y = Math.PI;
-    gltf.scene.traverse(function (node) {
+
+    console.log(gltf.animations); // Exibe as animações disponíveis no console
+    fox = gltf.scene;
+
+    fox.scale.set(0.02, 0.02, 0.02);
+    fox.position.set(0, 0.190, 0.5);
+    fox.rotation.y = Math.PI;
+
+    fox.traverse(function (node) {
         if (node.isMesh) {
-            node.castShadow = true; // Sombra no chão da raposa
+            node.castShadow = true;
             node.receiveShadow = true;
         }
     });
-    scene.add(gltf.scene);
+
+    scene.add(fox);
+
+    // Cria o controlador de animações
+    mixer = new THREE.AnimationMixer(fox);
+
+    // Armazena todas as animações disponíveis
+    gltf.animations.forEach((animation) => {
+        animations[animation.name] = mixer.clipAction(animation);
+    });
+
+    // Inicia a animação de repouso
+    mudarAnimacao('idle');
+}
+
+function mudarAnimacao(nome) {
+
+    if (!animations[nome]) return;
+
+    if (animacaoAtual === animations[nome]) return;
+
+    if (animacaoAtual) {
+        animacaoAtual.stop();
+    }
+
+    animacaoAtual = animations[nome];
+
+    animacaoAtual.reset();
+    animacaoAtual.play();
 }
 
 function loadSky(gltf) {
@@ -273,14 +312,124 @@ function applyOrbitalFrustumCulling() {
 
 }
 
+const keys = {}; // Armazena o estado das teclas pressionadas
+
+window.addEventListener('keydown', (event) => { // Verificar se a tecla foi pressionada
+    keys[event.code] = true;
+});
+
+window.addEventListener('keyup', (event) => { // Verificar se a tecla foi liberada
+    keys[event.code] = false;
+});
+
+const clock = new THREE.Clock();
+
+const velocidade = 0.5;
+const velocidadeRotacao = 2;
+let anguloFox = Math.PI;
+
+function movimentarFox(deltaTime) {
+
+    if (!fox) return;
+
+    // Rotação para esquerda
+    if (keys.ArrowLeft || keys.KeyA) {
+        anguloFox += velocidadeRotacao * deltaTime;
+    }
+
+    // Rotação para direita
+    if (keys.ArrowRight || keys.KeyD) {
+        anguloFox -= velocidadeRotacao * deltaTime;
+    }
+
+    fox.rotation.y = anguloFox;
+
+    // Movimentação para frente
+    if (keys.ArrowUp || keys.KeyW) {
+        fox.translateZ(velocidade * deltaTime);
+    }
+
+    // Movimentação para trás
+    if (keys.ArrowDown || keys.KeyS) {
+        fox.translateZ(-velocidade * deltaTime);
+    }
+
+    // Controle das animações (precisam ficar separadas das teclas por causa da animação idle. Eu teria que botar um else if em cada uma das setas e aí a raposa nao andaria em diagonal)
+    if (keys.ArrowLeft || keys.KeyA) {
+
+        if (keys.ArrowDown || keys.KeyS) {
+            animacaoAtual.timeScale = -1;
+            fox.scale.x = -0.02;
+        } else {
+            animacaoAtual.timeScale = 1;
+            fox.scale.x = 0.02;
+        }
+
+        mudarAnimacao('walk.left');
+
+    } else if (keys.ArrowRight || keys.KeyD){
+
+        if (keys.ArrowDown || keys.KeyS) {
+            animacaoAtual.timeScale = -1;
+            fox.scale.x = 0.02;
+        } else {
+            animacaoAtual.timeScale = 1;
+            fox.scale.x = -0.02;
+        }
+
+        mudarAnimacao('walk.left');
+
+    } else if (keys.ArrowUp || keys.KeyW ) {
+
+        mudarAnimacao('walk');
+        animacaoAtual.timeScale = 1;
+
+    } else if (keys.ArrowDown || keys.KeyS) {
+        
+        mudarAnimacao('walk');
+        animacaoAtual.timeScale = -1;
+
+    } else {
+        mudarAnimacao('idle');
+    }
+}
+
+function atualizarCamera() {
+
+    if (!fox) return;
+
+    const distancia = 0.5;
+    const altura = 0.3;
+
+    camera.position.set(
+        fox.position.x - Math.sin(fox.rotation.y) * distancia,
+        fox.position.y + altura,
+        fox.position.z - Math.cos(fox.rotation.y) * distancia
+    );
+
+    camera.lookAt(fox.position);
+}
+
 function animate() {
     requestAnimationFrame(animate);
 
-    controls.update();
+    const deltaTime = clock.getDelta();
+
+    movimentarFox(deltaTime);
+
+    if (mixer) {
+        mixer.update(deltaTime);
+    }
+
+    atualizarCamera();
+
+    camera.updateMatrixWorld();
 
     cameraHelper.update();
 
     applyOrbitalFrustumCulling();
+
+    // controls.update();
 
     if (params.splitViewport) {
         const width = window.innerWidth;
